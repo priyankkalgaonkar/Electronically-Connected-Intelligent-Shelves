@@ -1,143 +1,148 @@
+/**
+Group 1: Electronically Controlled Intelligent Shelves
+Code Developed by: Priyank Kalgaonkar
+ECE53301 - Final Project - Fall 2019
+**/
+
 #include "mbed.h"
-#include "Servo.h"
 #include "hcsr04.h"
-#include "TextLCD.h"
 #include "ESP8266.h"
 #include "math.h"
-#define IP "184.106.153.149"            //ThingSpeak IoT Server's IP Address
+#define CloudIP "184.106.153.149"           //Raw IP Address of ThingSpeak Cloud Server
 
-HCSR04  Sensor1(A4,A5);                 //Ultrasonic Sensor; A4 = PTC10; A5 = PTC11
-    //TextLCD lcd(PTE0,PTE1);           //Note: Giving Error Here
-    //I2C I2C(PTE25, PTE24);            //Accelerometer //Remove if not required
-Serial PC(USBTX, USBRX);                //Serial Communication with PC (TeraTerm)
-Serial OutputDevice(PTC15,PTC14);
-ESP8266 Wifi(PTC17, PTC16, 115200);     //Wifi Module; Baud Rate = 115200
-DigitalOut RLed(LED1);                  //Onboard Red LED = Warning
-DigitalOut GLed(LED2);                  //Onboard Green LED = All OK
-DigitalOut BLed(LED3);                  //Onboard Blue LED = Wifi Tx
+DigitalOut RLed(LED1);                      //Onboard Red LED = Shelf Out of Stock
+DigitalOut GLed(LED2);                      //Onboard Green LED = All OK
+DigitalOut BLed(LED3);                      //Onboard Blue LED for Wifi Tx Indication
+HCSR04 usensor1(D8,D9);                     //ECHO Pin=D9, TRIG Pin=D8
+HCSR04 usensor2(D7,D6);                     //ECHO Pin=D7, TRIG Pin=D6
+Serial pc(USBTX,USBRX);                     //Serial Communication with PC
+ESP8266 wifi(PTC17, PTC16, 115200);         //Tx Pin:PTC17; Rx Pin:PTC17; Baud rate:115200
 
-char Tx[255], Rx[1000];
-void Wifi_Tx(void);
+void wifi_send(void);;                      //Connect and Push Data Channel to Cloud Server
 
-int distance;
-int Dist_Percent;
-//int State = 0;
+int num = 0;
+int distance1, distance2;
+float dist_remaining1, dist_percent1, dist_remaining2, dist_percent2;
+char snd[255],rcv[1000];                    //snd: send command to ESP8266
+                                            //rcv: receive response from ESP8266
 
 int main()
 {
-   RLed = 0;                            //Red LED = OFF
-   GLed = 0;                            //Green LED = OFF
-   unsigned char count = 0;
-   
-   while(1)
-   {
-        Sensor1.start();                //Ultrasonic Sesnor = ON
-        wait_ms(0.0025);
-        int distance = Sensor1.get_dist_cm();
-        Dist_Percent = (30 - distance)/30 * 100;//Calculates % distance Remaining
-        wait(0.5);
-        PC.printf("Stock Remaining % = %i\r\n", Dist_Percent);
-        
-/*//Displaying on External 2x16 LCD Display        
-        lcd.cls();
-        lcd.locate(0,0);
-        lcd.printf("cm:%ld",distance);
- 
-        count++;
-        lcd.locate(0,1);
-        lcd.printf("distance =%d",count);
-//End of LCD Display Processing*/
-        
-        if(distance >= 30 )
-        {
-            GLed = 0;                   //Green LED = OFF
-            wait(0.5);
-            RLed = 1;                   //Red LED = ON
-            wait(0.5);
-            OutputDevice.printf("Shelf is Empty. Re-Stock Immediately.");  
-        }
-        else
-        {
-            RLed = 0;                   //Red LED = OFF
-            wait(0.5);
-            GLed = 1;                   //Green LED = ON
-        }
-    }
-//Wifi (ESP Module) Setup and Transmission to ThingSpeak IoT Cloud
-    PC.baud(115200);
+    pc.baud(115200);                        //Baud Rate of 115200 for Tera Term
     
-    PC.printf("Setting mode to Access Point\r\n");
-    Wifi.SetMode(1);
-    Wifi.RcvReply(Rx, 1000);
-    PC.printf("%s",Rx);                 //Print Response from ESP Module
+    pc.printf("########  ######  ####  ######      ######  ##    ##  ######  ######## ######## ##     ##\n\r");
+    pc.printf("##       ##    ##  ##  ##    ##    ##    ##  ##  ##  ##    ##    ##    ##       ###   ###\n\r");
+    pc.printf("##       ##        ##  ##          ##         ####   ##          ##    ##       #### ####\n\r");
+    pc.printf("######   ##        ##   ######      ######     ##     ######     ##    ######   ## ### ##\n\r");
+    pc.printf("##       ##        ##        ##          ##    ##          ##    ##    ##       ##     ##\n\r");
+    pc.printf("##       ##    ##  ##  ##    ##    ##    ##    ##    ##    ##    ##    ##       ##     ##\n\r");
+    pc.printf("########  ######  ####  ######      ######     ##     ######     ##    ######## ##     ##\n\r");
+    pc.printf("-----------------------------------------------------------------------------------------\n\r");
+    pc.printf("Project By: Priyank Kalgaonkar, Sahil Kumar, Linknath Surya Balasubramanian\n\r");
+    pc.printf("-----------------------------------------------------------------------------------------\n\r\n\r");
     
-    PC.printf("Conneting to Wi-Fi\r\n");
-    Wifi.Join("Network SSID", "Password");//Configure Wifi Username & Pwd here 
-    Wifi.RcvReply(Rx, 1000);
-    PC.printf("%s\n", Rx);              //Print Response from ESP Module
-    
+    pc.printf("Initial Setup\r\n");
+    wifi.SetMode(1);                        //Set ESP mode to 1
+    wifi.RcvReply(rcv, 1000);               //Receive a response from ESP
+    pc.printf("%s\r", rcv);
+
+    pc.printf("Conneting to WiFi\r\n");     //AP Setup Initialization
+    wifi.Join("Priyank's iPhone", "audi1155"); 
+    wifi.RcvReply(rcv, 1000);
+    pc.printf("%s\n", rcv);
     wait(8);
     
-    PC.printf("Getting IP\r\n");
-    Wifi.GetIP(Rx);
-    PC.printf("%s\n", Rx);              //Display AP's IP Address
+    wifi.GetIP(rcv);                        //Obtains an IP address from the AP
     
     while (1) 
     {
-        PC.printf("Syncing with Cloud. Please Wait.\n");
-        Wifi_Tx();
-        BLed = 1;
-        wait(2.0f);
+        wifi_send();
+        
+        RLed = 1;
+        GLed = 1;
         BLed = 0;
-        wait(1.5f);
-    }    
+        wait(2.0f);
+    }
 }
 
-void Wifi_Tx(void)
+void wifi_send(void)
 {
-    strcpy(Tx,"AT+CIPMUX=1\n");        //Start Up Multi-IP Connection
-    Wifi.SendCMD(Tx);
-    PC.printf(Tx);
-    
-    wait(3);
-    
-    Wifi.RcvReply(Rx, 1000);
-    PC.printf("%s\n", Rx);
-    
-    wait(3);
-    
-    sprintf(Tx,"AT+CIPSTART=4,\"TCP\",\"%s\",80\n",IP); //Connect to ThingSpeak server 
-    PC.printf(Tx);
-    
-    wait(3);
-    
-    Wifi.RcvReply(Rx, 1000);
-    PC.printf("%s\n", Rx);
-    
-    wait(3);
-    
-    strcpy(Tx,"AT+CIPSEND=4,47\n");    //ESP sends data to ThingSpeak server 
-    Wifi.SendCMD(Tx);
-    PC.printf(Tx);
-    
-    wait(3);
-    
-    Wifi.RcvReply(Rx, 1000);
-    PC.printf("%s\n", Rx);
-    
-    wait(3);
-    
-    //Write to ThingSpeak Channel Feed (Push data to Cloud)
-    sprintf(Tx,"GET https://api.thingspeak.com/update?api_key=NZ7C54KZ7AQ4T6IP&field1=0");
-    PC.printf("%s",Tx);
-    Wifi.SendCMD(Tx);
-    
-    wait(3);
-    
-    Wifi.RcvReply(Rx, 1000);
-    PC.printf("%s", Rx);
-    
-    Wifi.SendCMD("AT+CIPCLOSE");        //Terminate Tranmission
-    Wifi.RcvReply(Rx, 1000);
-    PC.printf("%s", Rx);
+    while(num<1000000000000)
+    {
+        num=num+1;
+        pc.printf("Cloud Sync Instance #: %d\n\r", num);
+        pc.printf("Syncing Data with Cloud, Please Wait.\n\r");
+        
+    //Ultrasound Sensor (HC-SR04) #1 Initialization
+        int a = 30;
+        usensor1.start();
+        wait_ms(500);
+        
+    //Calculating Distance Percentage Remaining for Sensor # 1
+        distance1 = usensor1.get_dist_cm();
+        dist_remaining1 = a-distance1;
+        dist_percent1 = (dist_remaining1/30)*100;
+        
+    //Ultrasound Sensor (HC-SR04) #2 Initialization
+        int b = 30;
+        usensor2.start();
+        wait_ms(500);
+        
+    //Calculating Distance Percentage Remaining for Sensor # 2
+        distance2 = usensor2.get_dist_cm();
+        dist_remaining2 = b-distance2;
+        dist_percent2 = (dist_remaining2/30)*100;
+        
+    //LED and Tera Term Output
+        if (distance1<30 && distance2<30) {
+            RLed = 1;
+            BLed = 1;
+            GLed = 0;
+            //printf("Percent remaining: %f\r", dist_percent1 && dist_percent2);
+        } else {
+            GLed = 1;
+            BLed = 1;
+            RLed = 0;
+            printf("Shelves Empty! Replenish Stock.\n\r");
+        }    
+        
+    //Sending Data to the Cloud Server via ESP8266 WiFi Module
+        strcpy(snd,"AT+CIPMUX=0\n\r");        //AT+CIPMUX: Enabling Single Channel Mode
+        wifi.SendCMD(snd);
+        wait(1);
+        wifi.RcvReply(rcv, 1000);
+        wait(1);
+        
+        sprintf(snd,"AT+CIPSTART=4,\"TCP\",\"%s\",80\n",CloudIP); //Establish TCP connection w/ Cloud Server
+        wait(1);
+        wifi.RcvReply(rcv, 1000);
+        wait(1);
+        
+        strcpy(snd,"AT+CIPSEND=100\n\r");    //Set length of the data that will be sent
+        wifi.SendCMD(snd);
+        pc.printf("%s\r", rcv);
+        wait(1);
+        wifi.RcvReply(rcv, 1000);
+        pc.printf("%s\r", rcv);
+        wait(1);
+        
+    //Pushing the data acquired from HC-SR04 Ultrasonic Sensor to Cloud Server via API
+        pc.printf("Product X - Sensor 1: ");
+        sprintf(snd,"GET https://api.thingspeak.com/update?api_key=O59NSRSQZCJ2G6WK&field1=%f\r", dist_percent1);
+        printf("Product X: Percent Stock Remaining: %f\n\r", dist_percent1);
+        wifi.SendCMD(snd);
+        pc.printf("%s\r",snd);
+        wait(1);
+        wifi.RcvReply(rcv, 1000);
+        pc.printf("%s\r", rcv);
+        
+        pc.printf("Product Y - Sensor 2: ");
+        sprintf(snd,"GET https://api.thingspeak.com/update?api_key=O59NSRSQZCJ2G6WK&field2=%f\n\r\n\r", dist_percent2);
+        wifi.SendCMD(snd);
+        pc.printf("%s\r",snd);
+        printf("Product Y: Percent Stock Remaining: %f\n\r\n\r", dist_percent2);
+        wait(1);
+        wifi.RcvReply(rcv, 1000);
+        pc.printf("%s\r", rcv);     
+    }
 }
