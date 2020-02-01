@@ -7,3 +7,5 @@ Project Description: Our design of ECIS system prototype includes an array of ul
 A copy of our Final Report can be accessed via this link: https://drive.google.com/open?id=1NSAnWObxRHyr0hpXWuKvOtI-dzXI2MXL .
 
 Video of our working prototype: https://youtu.be/yUNbQFOUya4 .
+
+Machine Learning Repo: https://github.com/priyankkalgaonkar/Predictive-Analysis-Using-Feature-Engineering (part of this ECIS project).
