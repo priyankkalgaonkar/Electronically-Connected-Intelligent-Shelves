@@ -2,6 +2,12 @@
 Group 1: Electronically Controlled Intelligent Shelves
 Code Developed by: Priyank Kalgaonkar
 ECE53301 - Final Project - Fall 2019
+
+Project Description: Our design of ECIS system prototype includes an array of ultrasonic sensors, which can be retrofitted in existing shelves with minimal modifications or built-in in to new shelves, connected wirelessly using a ESP8266 chip to a central cloud server (Thingspeak) from where the inventory of goods on the shelf can be monitored in real-time as well as data acquired from these sensors can be used to perform predictive analysis using data mining, feature engineering and machine learning techniques to better predict future product sales and minimize inaccurate forecasting instances.
+
+This project was ranked #1 in class by peer reviews and ratings.
+
+Target Hardware: NXP FRDM-K64F MCU based on Arm® Cortex®-M4 Core with 1 MB flash memory and 256 kB RAM. IDE used: ARM Mbed Compiler.
 **/
 
 #include "mbed.h"
@@ -29,7 +35,7 @@ char snd[255],rcv[1000];                    //snd: send command to ESP8266
 int main()
 {
     pc.baud(115200);                        //Baud Rate of 115200 for Tera Term
-    
+
     pc.printf("########  ######  ####  ######      ######  ##    ##  ######  ######## ######## ##     ##\n\r");
     pc.printf("##       ##    ##  ##  ##    ##    ##    ##  ##  ##  ##    ##    ##    ##       ###   ###\n\r");
     pc.printf("##       ##        ##  ##          ##         ####   ##          ##    ##       #### ####\n\r");
@@ -40,24 +46,24 @@ int main()
     pc.printf("-----------------------------------------------------------------------------------------\n\r");
     pc.printf("Project By: Priyank Kalgaonkar, Sahil Kumar, Linknath Surya Balasubramanian\n\r");
     pc.printf("-----------------------------------------------------------------------------------------\n\r\n\r");
-    
+
     pc.printf("Initial Setup\r\n");
     wifi.SetMode(1);                        //Set ESP mode to 1
     wifi.RcvReply(rcv, 1000);               //Receive a response from ESP
     pc.printf("%s\r", rcv);
 
     pc.printf("Conneting to WiFi\r\n");     //AP Setup Initialization
-    wifi.Join("Priyank's iPhone", "audi1155"); 
+    wifi.Join("Priyank's iPhone", "audi1155");
     wifi.RcvReply(rcv, 1000);
     pc.printf("%s\n", rcv);
     wait(8);
-    
+
     wifi.GetIP(rcv);                        //Obtains an IP address from the AP
-    
-    while (1) 
+
+    while (1)
     {
         wifi_send();
-        
+
         RLed = 1;
         GLed = 1;
         BLed = 0;
@@ -72,27 +78,27 @@ void wifi_send(void)
         num=num+1;
         pc.printf("Cloud Sync Instance #: %d\n\r", num);
         pc.printf("Syncing Data with Cloud, Please Wait.\n\r");
-        
+
     //Ultrasound Sensor (HC-SR04) #1 Initialization
         int a = 30;
         usensor1.start();
         wait_ms(500);
-        
+
     //Calculating Distance Percentage Remaining for Sensor # 1
         distance1 = usensor1.get_dist_cm();
         dist_remaining1 = a-distance1;
         dist_percent1 = (dist_remaining1/30)*100;
-        
+
     //Ultrasound Sensor (HC-SR04) #2 Initialization
         int b = 30;
         usensor2.start();
         wait_ms(500);
-        
+
     //Calculating Distance Percentage Remaining for Sensor # 2
         distance2 = usensor2.get_dist_cm();
         dist_remaining2 = b-distance2;
         dist_percent2 = (dist_remaining2/30)*100;
-        
+
     //LED and Tera Term Output
         if (distance1<30 && distance2<30) {
             RLed = 1;
@@ -104,20 +110,20 @@ void wifi_send(void)
             BLed = 1;
             RLed = 0;
             printf("Shelves Empty! Replenish Stock.\n\r");
-        }    
-        
+        }
+
     //Sending Data to the Cloud Server via ESP8266 WiFi Module
         strcpy(snd,"AT+CIPMUX=0\n\r");        //AT+CIPMUX: Enabling Single Channel Mode
         wifi.SendCMD(snd);
         wait(1);
         wifi.RcvReply(rcv, 1000);
         wait(1);
-        
+
         sprintf(snd,"AT+CIPSTART=4,\"TCP\",\"%s\",80\n",CloudIP); //Establish TCP connection w/ Cloud Server
         wait(1);
         wifi.RcvReply(rcv, 1000);
         wait(1);
-        
+
         strcpy(snd,"AT+CIPSEND=100\n\r");    //Set length of the data that will be sent
         wifi.SendCMD(snd);
         pc.printf("%s\r", rcv);
@@ -125,7 +131,7 @@ void wifi_send(void)
         wifi.RcvReply(rcv, 1000);
         pc.printf("%s\r", rcv);
         wait(1);
-        
+
     //Pushing the data acquired from HC-SR04 Ultrasonic Sensor to Cloud Server via API
         pc.printf("Product X - Sensor 1: ");
         sprintf(snd,"GET https://api.thingspeak.com/update?api_key=O59NSRSQZCJ2G6WK&field1=%f\r", dist_percent1);
@@ -135,7 +141,7 @@ void wifi_send(void)
         wait(1);
         wifi.RcvReply(rcv, 1000);
         pc.printf("%s\r", rcv);
-        
+
         pc.printf("Product Y - Sensor 2: ");
         sprintf(snd,"GET https://api.thingspeak.com/update?api_key=O59NSRSQZCJ2G6WK&field2=%f\n\r\n\r", dist_percent2);
         wifi.SendCMD(snd);
@@ -143,6 +149,6 @@ void wifi_send(void)
         printf("Product Y: Percent Stock Remaining: %f\n\r\n\r", dist_percent2);
         wait(1);
         wifi.RcvReply(rcv, 1000);
-        pc.printf("%s\r", rcv);     
+        pc.printf("%s\r", rcv);
     }
 }
